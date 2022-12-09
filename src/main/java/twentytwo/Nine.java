@@ -3,8 +3,10 @@ package twentytwo;
 import common.Assignment;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public class Nine implements Assignment<Integer> {
@@ -28,14 +30,16 @@ public class Nine implements Assignment<Integer> {
 
   @Override
   public Integer partOne() {
-    Grid grid = new Grid();
+    Grid grid = new Grid(2);
     instructions.forEach(instruction -> grid.move(instruction.direction, instruction.steps));
     return grid.visited.size();
   }
 
   @Override
   public Integer partTwo() {
-    return null;
+    Grid grid = new Grid(10);
+    instructions.forEach(instruction -> grid.move(instruction.direction, instruction.steps));
+    return grid.visited.size();
   }
 
   private record Instruction(Grid.Direction direction, int steps) {
@@ -43,17 +47,16 @@ public class Nine implements Assignment<Integer> {
 
   private static class Grid {
     Set<Position> visited = new HashSet<>();
-    Position head;
-    Position tail;
+    Position[] knots;
 
     enum Direction {
       U, R, D, L
     }
 
-    public Grid() {
+    public Grid(int numberOfKnots) {
       Position start = new Position(0, 0);
-      head = start;
-      tail = start;
+      knots = new Position[numberOfKnots];
+      Arrays.fill(knots, start);
       visited.add(start);
     }
 
@@ -61,25 +64,25 @@ public class Nine implements Assignment<Integer> {
       switch (direction) {
         case U -> {
           for (int i = 0; i < steps; i++) {
-            head = new Position(head.x, head.y + 1);
+            knots[0] = new Position(knots[0].x, knots[0].y + 1);
             moveTail();
           }
         }
         case R -> {
           for (int i = 0; i < steps; i++) {
-            head = new Position(head.x + 1, head.y);
+            knots[0] = new Position(knots[0].x + 1, knots[0].y);
             moveTail();
           }
         }
         case D -> {
           for (int i = 0; i < steps; i++) {
-            head = new Position(head.x, head.y - 1);
+            knots[0] = new Position(knots[0].x, knots[0].y - 1);
             moveTail();
           }
         }
         case L -> {
           for (int i = 0; i < steps; i++) {
-            head = new Position(head.x - 1, head.y);
+            knots[0] = new Position(knots[0].x - 1, knots[0].y);
             moveTail();
           }
         }
@@ -87,18 +90,26 @@ public class Nine implements Assignment<Integer> {
     }
 
     public void moveTail() {
-      int deltaX = Math.abs(head.x - tail.x);
-      int deltaY = Math.abs(head.y - tail.y);
+      for (int index = 0; index < knots.length - 1; index++) {
+        moveNextKnot(index, index + 1);
+      }
+      visited.add(knots[knots.length - 1]);
+    }
+
+    private void moveNextKnot(int headIndex, int tailIndex) {
+      int deltaX = Math.abs(knots[headIndex].x - knots[tailIndex].x);
+      int deltaY = Math.abs(knots[headIndex].y - knots[tailIndex].y);
       int totalDelta = deltaX + deltaY;
       switch (totalDelta) {
+        case 4: // if head was already diagonally adjacent to tail and then is moved diagonally again, delta becomes 4
         case 3:
-          moveDiagonally(deltaX, deltaY);
+          moveDiagonally(headIndex, tailIndex, deltaX, deltaY);
           break;
         case 2:
           if (deltaX == 2) {
-            moveHorizontally();
+            moveHorizontally(headIndex, tailIndex);
           } else if (deltaY == 2) {
-            moveVertically();
+            moveVertically(headIndex, tailIndex);
           }
           // diagonally adjacent
           break;
@@ -110,35 +121,56 @@ public class Nine implements Assignment<Integer> {
       }
     }
 
-    private void moveDiagonally(int deltaX, int deltaY) {
-      int x;
-      int y;
-      if (deltaX == 1) {
-        x = head.x;
-        y = (head.y + tail.y) / 2;
+    private void moveDiagonally(int headIndex, int tailIndex, int deltaX, int deltaY) {
+      if (deltaX + deltaY == 4) {
+        knots[tailIndex] =
+            new Position((knots[headIndex].x + knots[tailIndex].x) / 2, (knots[headIndex].y + knots[tailIndex].y) / 2);
+      } else if (deltaX == 1) {
+        knots[tailIndex] = new Position(knots[headIndex].x, (knots[headIndex].y + knots[tailIndex].y) / 2);
       } else {
-        x = (head.x + tail.x) / 2;
-        y = head.y;
+        knots[tailIndex] = new Position((knots[headIndex].x + knots[tailIndex].x) / 2, knots[headIndex].y);
       }
-      tail = new Position(x, y);
-      visited.add(tail);
     }
 
-    private void moveHorizontally() {
-      tail = new Position((head.x + tail.x) / 2, tail.y);
-      visited.add(tail);
+    private void moveHorizontally(int headIndex, int tailIndex) {
+      knots[tailIndex] = new Position((knots[headIndex].x + knots[tailIndex].x) / 2, knots[tailIndex].y);
     }
 
-    private void moveVertically() {
-      tail = new Position(tail.x, (head.y + tail.y) / 2);
-      visited.add(tail);
+    private void moveVertically(int headIndex, int tailIndex) {
+      knots[tailIndex] = new Position(knots[tailIndex].x, (knots[headIndex].y + knots[tailIndex].y) / 2);
     }
   }
 
-  private record Position(int x, int y) {
+  private static class Position {
+
+    int x;
+    int y;
+
+    public Position(int x, int y) {
+      this.x = x;
+      this.y = y;
+    }
+
     @Override
     public String toString() {
       return x + "," + y;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      Position position = (Position) o;
+      return x == position.x && y == position.y;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(x, y);
     }
   }
 }
