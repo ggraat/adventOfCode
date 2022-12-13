@@ -42,7 +42,48 @@ public class Thirteen implements Assignment<String> {
 
   @Override
   public String partTwo() {
-    return null;
+    List<Node> nodes = new ArrayList<>();
+    for (Pair pair : pairs) {
+      if (pair.rightOrder()) {
+        nodes.add(pair.left);
+        nodes.add(pair.right);
+      } else {
+        nodes.add(pair.right);
+        nodes.add(pair.left);
+      }
+    }
+    Node dividerPacket = new ListNode();
+    ListNode listNode = new ListNode();
+    listNode.addSubNode(new ValueNode(2));
+    dividerPacket.addSubNode(listNode);
+    Node dividerPacket2 = new ListNode();
+    ListNode listNode2 = new ListNode();
+    listNode2.addSubNode(new ValueNode(6));
+    dividerPacket2.addSubNode(listNode2);
+    nodes.add(dividerPacket);
+    nodes.add(dividerPacket2);
+    List<Node> sorted = getSortedNodes(nodes);
+    return String.valueOf((sorted.indexOf(dividerPacket) + 1) * (sorted.indexOf(dividerPacket2) + 1));
+  }
+
+  private List<Node> getSortedNodes(List<Node> nodes) {
+    List<Node> sorted = new ArrayList<>();
+    while (!nodes.isEmpty()) {
+      Node lowest = getLowestNode(nodes);
+      sorted.add(lowest);
+      nodes.remove(lowest);
+    }
+    return sorted;
+  }
+
+  private Node getLowestNode(List<Node> nodes) {
+    Node first = nodes.get(0);
+    for (int i = 1; i < nodes.size(); i++) {
+      if (!new Pair(first, nodes.get(i)).rightOrder()) {
+        first = nodes.get(i);
+      }
+    }
+    return first;
   }
 
   private static class NodeParser {
