@@ -52,7 +52,9 @@ public class Thirteen implements Assignment<String> {
 
     public Node parse(String line) {
       Deque<Node> nodes = new ArrayDeque<>();
-      for (char c : line.toCharArray()) {
+      char[] charArray = line.toCharArray();
+      for (int i = 0; i < charArray.length; i++) {
+        char c = charArray[i];
         switch (c) {
           case START -> {
             nodes.push(new ListNode());
@@ -67,6 +69,10 @@ public class Thirteen implements Assignment<String> {
           }
           default -> {
             int value = Integer.parseInt(String.valueOf(c));
+            if (charArray[i + 1] == 48) { // include 10 :p
+              value = 10;
+              i++;
+            }
             nodes.peek().addSubNode(new ValueNode(value));
           }
         }
@@ -122,20 +128,21 @@ public class Thirteen implements Assignment<String> {
     }
 
     private void compareList(ListNode left, ListNode right) {
-      List<Node> subs = left.subs;
-      for (int i = 0; i < subs.size(); i++) {
-        Node leftSub = subs.get(i);
-        if (i >= right.subs.size()) {
+      List<Node> leftSubs = left.subs;
+      List<Node> rightSubs = right.subs;
+      for (int i = 0; i < leftSubs.size(); i++) {
+        if (i >= rightSubs.size()) {
           correct = false;
           return;
         }
-        Node rightSub = right.subs.get(i);
+        Node leftSub = leftSubs.get(i);
+        Node rightSub = rightSubs.get(i);
         compareNode(leftSub, rightSub);
         if (correct != null) {
           return;
         }
       }
-      if (subs.size() < right.subs.size()) {
+      if (leftSubs.size() < rightSubs.size()) {
         correct = true;
       }
     }
@@ -143,9 +150,7 @@ public class Thirteen implements Assignment<String> {
     private void compareValue(ValueNode left, ValueNode right) {
       if (left.value < right.value) {
         correct = true;
-        return;
-      }
-      if (right.value < left.value) {
+      } else if (left.value > right.value) {
         correct = false;
       }
       // left == right -> undetermined
@@ -153,12 +158,10 @@ public class Thirteen implements Assignment<String> {
   }
 
   private static class Node {
-    Node parent;
     List<Node> subs = new ArrayList<>();
 
     public void addSubNode(Node sub) {
       subs.add(sub);
-      sub.parent = this;
     }
   }
 
