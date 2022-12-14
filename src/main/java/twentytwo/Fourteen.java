@@ -17,7 +17,7 @@ public class Fourteen implements Assignment<String> {
 
   @Override
   public void readInput() {
-    canvas = new Canvas(600, 200);
+    canvas = new Canvas(1000, 1000);
     List<String> lines = readInputLines();
     for (String line : lines) {
       String[] splitPoints = line.split(" -> ");
@@ -28,11 +28,11 @@ public class Fourteen implements Assignment<String> {
             Integer.parseInt(secondPoint[0]), Integer.parseInt(secondPoint[1]));
       }
     }
-    canvas.determineDimensions();
   }
 
   @Override
   public String partOne() {
+    canvas.determineDimensions();
     canvas.dropSand();
     canvas.printCanvas();
     return String.valueOf(canvas.getRestingSand());
@@ -40,7 +40,11 @@ public class Fourteen implements Assignment<String> {
 
   @Override
   public String partTwo() {
-    return null;
+    readInput();
+    canvas.addFloor();
+    canvas.dropSandOnTheFloor();
+    canvas.printCanvas();
+    return String.valueOf(canvas.getRestingSand());
   }
 
   private static class Canvas {
@@ -50,7 +54,9 @@ public class Fourteen implements Assignment<String> {
     private int maxY;
 
     public Canvas(int maxX, int maxY) {
-      initCanvas(maxX, maxY);
+      this.maxX = maxX;
+      this.maxY = maxY;
+      initCanvas();
     }
 
     public void dropSand() {
@@ -79,11 +85,36 @@ public class Fourteen implements Assignment<String> {
       }
     }
 
+    public void dropSandOnTheFloor() {
+      Sand sand = new Sand(500, 0);
+      while (true) {
+        if (points[sand.x][sand.y + 1] instanceof Sand || points[sand.x][sand.y + 1] instanceof Rock) {
+          if (points[sand.x - 1][sand.y + 1] instanceof Sand || points[sand.x - 1][sand.y + 1] instanceof Rock) {
+            if (points[sand.x + 1][sand.y + 1] instanceof Sand || points[sand.x + 1][sand.y + 1] instanceof Rock) {
+              points[sand.x][sand.y] = sand;
+              if (points[500][0] instanceof Sand) {
+                return;
+              }
+              sand = new Sand(500, 0);
+            } else {
+              sand.x++;
+              sand.y++;
+            }
+          } else {
+            sand.x--;
+            sand.y++;
+          }
+        } else {
+          sand.y++;
+        }
+      }
+    }
+
     public long getRestingSand() {
       return Arrays.stream(points).mapToLong(row -> Arrays.stream(row).filter(p -> p instanceof Sand).count()).sum();
     }
 
-    private void initCanvas(int maxX, int maxY) {
+    private void initCanvas() {
       points = new Point[maxX][maxY];
       for (int x = 0; x < maxX; x++) {
         for (int y = 0; y < maxY; y++) {
@@ -142,6 +173,15 @@ public class Fourteen implements Assignment<String> {
         System.out.println();
       }
       System.out.println();
+    }
+
+    public void addFloor() {
+      maxY =
+        Arrays.stream(points).mapToInt(row -> Arrays.stream(row).filter(p -> p instanceof Rock || p instanceof Sand)
+          .mapToInt(p -> p.y).max().orElse(0)).max().orElse(points[0].length) + 2;
+      for (int x = 0; x < points.length; x++) {
+        points[x][maxY] = new Rock(x, maxY);
+      }
     }
   }
 
