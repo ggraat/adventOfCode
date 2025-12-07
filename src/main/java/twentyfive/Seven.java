@@ -26,7 +26,7 @@ public class Seven implements Assignment<Long> {
 
   @Override
   public Long partTwo() {
-    return 0L;
+    return map.walk(0, map.getStart());
   }
 
   private static class Map {
@@ -37,11 +37,13 @@ public class Seven implements Assignment<Long> {
     private static final char START = 'S';
     private static final char SPLIT = '^';
     private static final char BEAM = '|';
+    long[][] memo;
 
     public Map(char[][] grid) {
       this.grid = grid;
       width = grid[0].length;
       height = grid.length;
+      memo = new long[height][width];
     }
 
     public void beam() {
@@ -56,6 +58,36 @@ public class Seven implements Assignment<Long> {
           }
         }
       }
+    }
+
+    public int getStart() {
+      for (int i = 0; i < grid[0].length; i++) {
+        char c = grid[0][i];
+        if (c == START) {
+          return i;
+        }
+      }
+      throw new RuntimeException("cannot find start");
+    }
+
+    public long walk(int row, int col) {
+      if (memo[row][col] != 0) {
+        return memo[row][col];
+      }
+
+      if (row == height - 1) {
+        memo[row][col] = 1;
+        return memo[row][col];
+      }
+
+      long result;
+      if (grid[row + 1][col] == SPLIT) {
+        result = walk(row + 1, col - 1) + walk(row + 1, col + 1);
+      } else {
+        result = walk(row + 1, col);
+      }
+      memo[row][col] = result;
+      return result;
     }
 
     private boolean beamFromAbove(int row, int col) {
