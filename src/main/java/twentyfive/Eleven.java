@@ -42,7 +42,47 @@ public class Eleven implements Assignment<Long> {
 
   @Override
   public Long partTwo() {
-    return 0L;
+    NodeVisitor nodeVisitor = new NodeVisitor();
+    long pathsStoF = nodeVisitor.getPathsBetween(nodes.get("svr"), nodes.get("fft"));
+    long pathsFtoD = nodeVisitor.getPathsBetween(nodes.get("fft"), nodes.get("dac"));
+    long pathsDtoO = nodeVisitor.getPathsBetween(nodes.get("dac"), nodes.get("out"));
+    long pathsStoD = nodeVisitor.getPathsBetween(nodes.get("svr"), nodes.get("dac"));
+    long pathsDtoF = nodeVisitor.getPathsBetween(nodes.get("dac"), nodes.get("fft")); // <- = 0 so dac always comes first
+    long pathsFtoO = nodeVisitor.getPathsBetween(nodes.get("fft"), nodes.get("out"));
+    return pathsStoF * pathsFtoD * pathsDtoO;
+  }
+
+  static class NodeVisitor {
+    private final Map<Node, Long> memo = new HashMap<>();
+    private Node endNode;
+
+    public NodeVisitor() {
+    }
+
+    private long dfs(Node node) {
+      if (memo.containsKey(node)) {
+        return memo.get(node);
+      }
+
+      if (node == endNode) {
+        memo.put(node, 1L);
+        return 1L;
+      }
+
+      long total = 0;
+      for (Node next : node.children) {
+        total += dfs(next);
+      }
+
+      memo.put(node, total);
+      return total;
+    }
+
+    public long getPathsBetween(Node startNode, Node endNode) {
+      this.endNode = endNode;
+      this.memo.clear();
+      return dfs(startNode);
+    }
   }
 
   static class Node {
