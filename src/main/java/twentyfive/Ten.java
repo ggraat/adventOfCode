@@ -5,9 +5,10 @@ import common.Assignment;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,7 +46,11 @@ public class Ten implements Assignment<Long> {
 
   @Override
   public Long partOne() {
-    return machines.stream().mapToLong(Machine::getShortestPath).sum();
+    long sum = 0L;
+    for (Machine machine : machines) {
+      sum += machine.getPatterns().stream().mapToLong(List::size).min().getAsLong();
+    }
+    return sum;
   }
 
   @Override
@@ -53,7 +58,8 @@ public class Ten implements Assignment<Long> {
     long sum = 0L;
     for (int i = 0; i < joltages.size(); i++) {
       JoltageMachine joltage = joltages.get(i);
-      long shortestPath = joltage.getShortestPath();
+      long shortestPath = joltage.getFewestPresses(joltage.joltage.state);
+      System.out.println(Arrays.toString(joltage.joltage.state) + " " + shortestPath);
       sum += shortestPath;
     }
     return sum;
@@ -98,7 +104,6 @@ public class Ten implements Assignment<Long> {
 
   static final class ButtonGroup {
     private final List<Integer> buttons;
-    private int maxUse = Integer.MAX_VALUE;
 
     ButtonGroup(List<Integer> buttons) {
       this.buttons = buttons;
@@ -111,20 +116,6 @@ public class Ten implements Assignment<Long> {
 
     public List<Integer> buttons() {
       return buttons;
-    }
-
-    public boolean contains(int joltage) {
-      return buttons.contains(joltage);
-    }
-
-    public boolean contains(List<Integer> exhausted) {
-      return exhausted.stream().anyMatch(this::contains);
-    }
-
-    public ButtonGroup copy() {
-      ButtonGroup buttonGroup = new ButtonGroup(buttons);
-      buttonGroup.maxUse = maxUse;
-      return buttonGroup;
     }
   }
 
@@ -143,209 +134,139 @@ public class Ten implements Assignment<Long> {
       this.buttonGroups = buttonGroups;
     }
 
-    public long getShortestPath() {
-      return step(buttonGroups, indicator, Integer.MAX_VALUE);
-    }
-
-    public long step(List<ButtonGroup> remainingButtonGroups, Indicator indicator, long min) {
-      if (remainingButtonGroups.isEmpty() || indicator.presses >= min) {
-        return Integer.MAX_VALUE;
-      }
-      for (ButtonGroup next : remainingButtonGroups) {
-        Indicator indicatorCopy = indicator.copy();
-        indicatorCopy.toggleButtons(next);
-        if (indicatorCopy.reachEndState()) {
-          return indicatorCopy.presses;
-        } else {
-          List<ButtonGroup> remaining = new ArrayList<>(remainingButtonGroups);
-          remaining.remove(next);
-          long steps = step(remaining, indicatorCopy, min);
-          if (steps < min) {
-            min = steps;
+    public List<List<ButtonGroup>> getPatterns() {
+      Deque<Work> stack = new ArrayDeque<>();
+      stack.push(new Work(buttonGroups, indicator, new ArrayList<>()));
+      List<List<ButtonGroup>> groups = new ArrayList<>();
+      while (!stack.isEmpty()) {
+        Work work = stack.pop();
+        if (work.buttonGroups.isEmpty()) {
+          continue;
+        }
+        for (int i = 0; i < work.buttonGroups().size(); i++) {
+          ButtonGroup next = work.buttonGroups.get(i);
+          Indicator indicatorCopy = work.indicator.copy();
+          indicatorCopy.toggleButtons(next);
+          if (indicatorCopy.reachEndState()) {
+            work.usedButtons.add(next);
+            groups.add(work.usedButtons);
+          } else {
+            List<ButtonGroup> remaining = new ArrayList<>(work.buttonGroups.subList(i + 1, work.buttonGroups.size()));
+            List<ButtonGroup> used = new ArrayList<>(work.usedButtons);
+            used.add(next);
+            stack.push(new Work(remaining, indicatorCopy, used));
           }
-
         }
       }
-      return min;
+      return groups;
     }
+  }
+
+  record Work(List<ButtonGroup> buttonGroups, Indicator indicator, List<ButtonGroup> usedButtons) {
   }
 
   class Joltage {
     int[] state;
-    private final List<ButtonGroup> buttonGroups;
-    long presses;
 
-    public Joltage(int[] state, List<ButtonGroup> buttonGroups) {
+    public Joltage(int[] state) {
       this.state = state;
-      this.buttonGroups = buttonGroups;
-    }
-
-    public void applyButtons(ButtonGroup buttonGroup) {
-      buttonGroup.buttons().forEach(button -> state[button]--);
-      presses++;
-    }
-
-    public boolean reachEndState() {
-      return Arrays.stream(state).sum() == 0;
-    }
-
-    public Joltage copy() {
-      Joltage joltage = new Joltage(Arrays.copyOf(state, state.length), buttonGroups);
-      joltage.presses = presses;
-      return joltage;
-    }
-
-    public int minPressedNeeded() {
-      return Arrays.stream(state).max().orElse(Integer.MAX_VALUE);
-    }
-
-    @Override
-    public String toString() {
-      String s = "[";
-      for (int i : state) {
-        s += i;
-      }
-      s += "]";
-      return s;
-    }
-
-    public boolean impossible() {
-      return Arrays.stream(state).anyMatch(i -> i < 0);
-    }
-
-    public boolean unreachable(List<ButtonGroup> buttonGroups) {
-      for (int index = 0; index < state.length; index++) {
-        int todo = state[index];
-        if (todo > 0) {
-          int finalIndex = index;
-          if (buttonGroups.stream().noneMatch(bg -> bg.contains(finalIndex))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    public List<Integer> exhausted() {
-      List<Integer> exhausted = new ArrayList<>();
-      for (int index = 0; index < state.length; index++) {
-        if (state[index] == 0) {
-          exhausted.add(index);
-        }
-      }
-      return exhausted;
-    }
-
-    private int getMinIndex() {
-      int min = 1000;
-      int minIndex = 0;
-      for (int index = 0; index < state.length; index++) {
-        if (state[index] != 0 && state[index] < min) {
-          min = state[index];
-          minIndex = index;
-        }
-      }
-      return minIndex;
-    }
-
-    public List<ButtonGroup> getButtonGroupsToProcess(List<ButtonGroup> buttonGroups) {
-      List<ButtonGroup> toProcess = new ArrayList<>();
-      int minIndex = getMinIndex();
-      List<Integer> exhausted = exhausted();
-      for (ButtonGroup bg : buttonGroups) {
-        if (bg.contains(minIndex) && !bg.contains(exhausted)) {
-          toProcess.add(bg);
-        }
-      }
-      return toProcess;
     }
   }
 
   private class JoltageMachine {
     private final List<ButtonGroup> buttonGroups;
     Joltage joltage;
+    Map<Integer, Long> memory = new HashMap<>();
 
     public JoltageMachine(List<ButtonGroup> buttonGroups, int[] joltage) {
-      for (int index = 0; index < joltage.length; index++) {
-        int j = joltage[index];
-        int fIndex = index;
-        buttonGroups.forEach(group -> {
-          if (group.contains(fIndex)) {
-            group.maxUse = Math.min(group.maxUse, j);
-          }
-        });
-      }
-      this.buttonGroups = buttonGroups.stream().sorted(Comparator.comparing(bg -> bg.maxUse)).toList();
-      this.joltage = new Joltage(joltage, buttonGroups);
+      this.buttonGroups = buttonGroups;
+      this.joltage = new Joltage(joltage);
     }
-
-    public long getShortestPath() {
-      Deque<Node> queue = new ArrayDeque<>();
-      queue.add(new Node(joltage, buttonGroups));
-      while (!queue.isEmpty()) {
-        Node node = queue.poll();
-        List<ButtonGroup> toProcess = node.joltage.getButtonGroupsToProcess(node.buttonGroups);
-        for (ButtonGroup bg : toProcess) {
-          Joltage joltageCopy = node.joltage.copy();
-          joltageCopy.applyButtons(bg);
-          if (joltageCopy.reachEndState()) {
-            return node.depth + 1;
-          } else {
-            Node child = new Node(joltageCopy, node.buttonGroups);
-            child.depth = node.depth + 1;
-            queue.add(child);
+    
+    public long getFewestPresses(int[] joltage) {
+      if (memory.containsKey(Arrays.hashCode(joltage))) {
+        return memory.get(Arrays.hashCode(joltage));
+      }
+      int divided = 0;
+      while (canDivide(joltage)) {
+        joltage = divide(joltage);
+        divided++;
+      }
+      if (divided > 0) {
+        return 2 * divided * getFewestPresses(joltage);
+      }
+      String indicatorString = getIndicatorString(joltage);
+      Machine machine = new Machine(indicatorString, buttonGroups);
+      List<List<ButtonGroup>> patterns = machine.getPatterns();
+      long min = Integer.MAX_VALUE;
+      for (List<ButtonGroup> buttons : patterns) {
+        int[] joltageApplied = applyPattern(joltage, buttons);
+        if (notPossible(joltageApplied)) {
+          continue;
+        }
+        if (isFinished(joltageApplied)) {
+          int result = buttons.size();
+          if (result < min) {
+            min = result;
           }
+          continue;
+        }
+        divided = 0;
+        while (canDivide(joltageApplied)) {
+          joltageApplied = divide(joltageApplied);
+          divided++;
+        }
+        assert !isFinished(joltageApplied);
+        assert !canDivide(joltageApplied);
+        assert !notPossible(joltageApplied);
+        int factor = (divided > 0) ? 2 * divided : 1;
+        long presses = factor * getFewestPresses(joltageApplied) + buttons.size();
+        if (presses < min) {
+          min = presses;
         }
       }
-      return 0;
-//      return step(buttonGroups, joltage, buttonGroups.stream().mapToInt(bg -> bg.maxUse).sum());
-    }
-
-    public long step(List<ButtonGroup> buttonGroups, Joltage joltage, long min) {
-      if (buttonGroups.isEmpty()) {
-        return Integer.MAX_VALUE;
-      }
-      if (joltage.impossible()) {
-        return Integer.MAX_VALUE;
-      }
-      if (joltage.unreachable(buttonGroups)) {
-        return Integer.MAX_VALUE;
-      }
-      if (joltage.presses + joltage.minPressedNeeded() >= min) {
-        return Integer.MAX_VALUE;
-      }
-      for (ButtonGroup next : buttonGroups) {
-        Joltage joltageCopy = joltage.copy();
-        joltageCopy.applyButtons(next);
-        if (joltageCopy.reachEndState()) {
-          return joltageCopy.presses;
-        } else {
-          List<ButtonGroup> remaining = new ArrayList<>();
-          List<Integer> exhausted = joltageCopy.exhausted();
-          buttonGroups.forEach(group -> {
-            if (!group.contains(exhausted)) {
-              remaining.add(group.copy());
-            }
-          });
-          long steps = step(remaining, joltageCopy, min);
-          if (steps < min) {
-            min = steps;
-          }
-
-        }
-      }
+      memory.put(Arrays.hashCode(joltage), min);
       return min;
     }
-  }
 
-  class Node {
-    Joltage joltage;
-    List<ButtonGroup> buttonGroups;
-    int depth;
+    private boolean canDivide(int[] joltage) {
+      return Arrays.stream(joltage).allMatch(i -> i % 2 == 0);
+    }
 
-    public Node(Joltage joltage, List<ButtonGroup> buttonGroups) {
-      this.joltage = joltage;
-      this.buttonGroups = buttonGroups;
+    private int[] divide(int[] joltage) {
+      int[] divided = new int[joltage.length];
+      for (int index = 0; index < joltage.length; index++) {
+        divided[index] = joltage[index] / 2;
+      }
+      return divided;
+    }
+
+    private boolean notPossible(int[] joltage) {
+      return Arrays.stream(joltage).anyMatch(i -> i < 0);
+    }
+
+    private boolean isFinished(int[] joltage) {
+      return Arrays.stream(joltage).sum() == 0;
+    }
+
+    private int[] applyPattern(int[] joltage, List<ButtonGroup> pattern) {
+      int[] applied = Arrays.copyOf(joltage, joltage.length);
+      for (ButtonGroup buttonGroup : pattern) {
+        buttonGroup.buttons.forEach(button -> applied[button]--);
+      }
+      return applied;
+    }
+
+    private String getIndicatorString(int[] joltage) {
+      String s = "";
+      for (int j : joltage) {
+        if (j % 2 == 0) {
+          s += ".";
+        } else {
+          s += "#";
+        }
+      }
+      return s;
     }
   }
 }
