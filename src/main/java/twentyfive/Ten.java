@@ -2,11 +2,12 @@ package twentyfive;
 
 import common.Assignment;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.List;
-import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -98,8 +99,6 @@ public class Ten implements Assignment<Long> {
   static final class ButtonGroup {
     private final List<Integer> buttons;
     private int maxUse = Integer.MAX_VALUE;
-    private int used;
-    private boolean disabled;
 
     ButtonGroup(List<Integer> buttons) {
       this.buttons = buttons;
@@ -122,26 +121,10 @@ public class Ten implements Assignment<Long> {
       return exhausted.stream().anyMatch(this::contains);
     }
 
-    public boolean isDisabled() {
-      return used == maxUse;
-    }
-
     public ButtonGroup copy() {
       ButtonGroup buttonGroup = new ButtonGroup(buttons);
       buttonGroup.maxUse = maxUse;
-      buttonGroup.used = used;
       return buttonGroup;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (!(o instanceof ButtonGroup that)) return false;
-      return maxUse == that.maxUse && used == that.used && disabled == that.disabled && Objects.equals(buttons, that.buttons);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(buttons, maxUse, used, disabled);
     }
   }
 
@@ -188,47 +171,38 @@ public class Ten implements Assignment<Long> {
   }
 
   class Joltage {
-    int[] current;
-    int[] endState;
+    int[] state;
+    private final List<ButtonGroup> buttonGroups;
     long presses;
 
-    public Joltage(int[] endState) {
-      this.endState = endState;
-      current = new int[endState.length];
+    public Joltage(int[] state, List<ButtonGroup> buttonGroups) {
+      this.state = state;
+      this.buttonGroups = buttonGroups;
     }
 
     public void applyButtons(ButtonGroup buttonGroup) {
-      buttonGroup.buttons().forEach(button -> current[button] += 1);
-      buttonGroup.used++;
+      buttonGroup.buttons().forEach(button -> state[button]--);
       presses++;
     }
 
     public boolean reachEndState() {
-      return Arrays.equals(current, endState);
+      return Arrays.stream(state).sum() == 0;
     }
 
     public Joltage copy() {
-      Joltage joltage = new Joltage(endState);
-      joltage.current = Arrays.copyOf(current, current.length);
+      Joltage joltage = new Joltage(Arrays.copyOf(state, state.length), buttonGroups);
       joltage.presses = presses;
       return joltage;
     }
 
-    @Override
-    public boolean equals(Object o) {
-      if (!(o instanceof Joltage joltage)) return false;
-      return presses == joltage.presses && Objects.deepEquals(current, joltage.current) && Objects.deepEquals(endState, joltage.endState);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(Arrays.hashCode(current), Arrays.hashCode(endState), presses);
+    public int minPressedNeeded() {
+      return Arrays.stream(state).max().orElse(Integer.MAX_VALUE);
     }
 
     @Override
     public String toString() {
       String s = "[";
-      for (int i : current) {
+      for (int i : state) {
         s += i;
       }
       s += "]";
@@ -236,21 +210,15 @@ public class Ten implements Assignment<Long> {
     }
 
     public boolean impossible() {
-      for (int index = 0; index < current.length; index++) {
-        if (current[index] > endState[index]) {
-          return true;
-        }
-      }
-      return false;
+      return Arrays.stream(state).anyMatch(i -> i < 0);
     }
 
     public boolean unreachable(List<ButtonGroup> buttonGroups) {
-      for (int index = 0; index < endState.length; index++) {
-        int todo = endState[index] - current[index];
+      for (int index = 0; index < state.length; index++) {
+        int todo = state[index];
         if (todo > 0) {
           int finalIndex = index;
-          int available = buttonGroups.stream().filter(bg -> bg.contains(finalIndex)).mapToInt(bg -> bg.maxUse - bg.used).sum();
-          if (available < todo) {
+          if (buttonGroups.stream().noneMatch(bg -> bg.contains(finalIndex))) {
             return true;
           }
         }
@@ -260,12 +228,36 @@ public class Ten implements Assignment<Long> {
 
     public List<Integer> exhausted() {
       List<Integer> exhausted = new ArrayList<>();
-      for (int index = 0; index < endState.length; index++) {
-        if (current[index] == endState[index]) {
+      for (int index = 0; index < state.length; index++) {
+        if (state[index] == 0) {
           exhausted.add(index);
         }
       }
       return exhausted;
+    }
+
+    private int getMinIndex() {
+      int min = 1000;
+      int minIndex = 0;
+      for (int index = 0; index < state.length; index++) {
+        if (state[index] != 0 && state[index] < min) {
+          min = state[index];
+          minIndex = index;
+        }
+      }
+      return minIndex;
+    }
+
+    public List<ButtonGroup> getButtonGroupsToProcess(List<ButtonGroup> buttonGroups) {
+      List<ButtonGroup> toProcess = new ArrayList<>();
+      int minIndex = getMinIndex();
+      List<Integer> exhausted = exhausted();
+      for (ButtonGroup bg : buttonGroups) {
+        if (bg.contains(minIndex) && !bg.contains(exhausted)) {
+          toProcess.add(bg);
+        }
+      }
+      return toProcess;
     }
   }
 
@@ -274,7 +266,6 @@ public class Ten implements Assignment<Long> {
     Joltage joltage;
 
     public JoltageMachine(List<ButtonGroup> buttonGroups, int[] joltage) {
-      this.joltage = new Joltage(joltage);
       for (int index = 0; index < joltage.length; index++) {
         int j = joltage[index];
         int fIndex = index;
@@ -285,10 +276,29 @@ public class Ten implements Assignment<Long> {
         });
       }
       this.buttonGroups = buttonGroups.stream().sorted(Comparator.comparing(bg -> bg.maxUse)).toList();
+      this.joltage = new Joltage(joltage, buttonGroups);
     }
 
     public long getShortestPath() {
-      return step(buttonGroups, joltage, buttonGroups.stream().mapToInt(bg -> bg.maxUse).sum());
+      Deque<Node> queue = new ArrayDeque<>();
+      queue.add(new Node(joltage, buttonGroups));
+      while (!queue.isEmpty()) {
+        Node node = queue.poll();
+        List<ButtonGroup> toProcess = node.joltage.getButtonGroupsToProcess(node.buttonGroups);
+        for (ButtonGroup bg : toProcess) {
+          Joltage joltageCopy = node.joltage.copy();
+          joltageCopy.applyButtons(bg);
+          if (joltageCopy.reachEndState()) {
+            return node.depth + 1;
+          } else {
+            Node child = new Node(joltageCopy, node.buttonGroups);
+            child.depth = node.depth + 1;
+            queue.add(child);
+          }
+        }
+      }
+      return 0;
+//      return step(buttonGroups, joltage, buttonGroups.stream().mapToInt(bg -> bg.maxUse).sum());
     }
 
     public long step(List<ButtonGroup> buttonGroups, Joltage joltage, long min) {
@@ -301,7 +311,7 @@ public class Ten implements Assignment<Long> {
       if (joltage.unreachable(buttonGroups)) {
         return Integer.MAX_VALUE;
       }
-      if (joltage.presses >= min) {
+      if (joltage.presses + joltage.minPressedNeeded() >= min) {
         return Integer.MAX_VALUE;
       }
       for (ButtonGroup next : buttonGroups) {
@@ -313,12 +323,8 @@ public class Ten implements Assignment<Long> {
           List<ButtonGroup> remaining = new ArrayList<>();
           List<Integer> exhausted = joltageCopy.exhausted();
           buttonGroups.forEach(group -> {
-            if (!group.isDisabled()) {
-              if (exhausted.isEmpty()) {
-                remaining.add(group.copy());
-              } else if (!group.contains(exhausted)) {
-                remaining.add(group.copy());
-              }
+            if (!group.contains(exhausted)) {
+              remaining.add(group.copy());
             }
           });
           long steps = step(remaining, joltageCopy, min);
@@ -329,6 +335,17 @@ public class Ten implements Assignment<Long> {
         }
       }
       return min;
+    }
+  }
+
+  class Node {
+    Joltage joltage;
+    List<ButtonGroup> buttonGroups;
+    int depth;
+
+    public Node(Joltage joltage, List<ButtonGroup> buttonGroups) {
+      this.joltage = joltage;
+      this.buttonGroups = buttonGroups;
     }
   }
 }
