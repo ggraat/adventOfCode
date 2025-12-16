@@ -65,7 +65,7 @@ public class Ten implements Assignment<Long> {
     return sum;
   }
 
-  class Indicator {
+  static class Indicator {
     boolean[] current;
     boolean[] endState;
     long presses;
@@ -119,7 +119,7 @@ public class Ten implements Assignment<Long> {
     }
   }
 
-  class Machine {
+  static class Machine {
     private final List<ButtonGroup> buttonGroups;
     Indicator indicator;
 
@@ -147,15 +147,13 @@ public class Ten implements Assignment<Long> {
           ButtonGroup next = work.buttonGroups.get(i);
           Indicator indicatorCopy = work.indicator.copy();
           indicatorCopy.toggleButtons(next);
+          List<ButtonGroup> used = new ArrayList<>(work.usedButtons);
+          used.add(next);
           if (indicatorCopy.reachEndState()) {
-            work.usedButtons.add(next);
-            groups.add(work.usedButtons);
-          } else {
-            List<ButtonGroup> remaining = new ArrayList<>(work.buttonGroups.subList(i + 1, work.buttonGroups.size()));
-            List<ButtonGroup> used = new ArrayList<>(work.usedButtons);
-            used.add(next);
-            stack.push(new Work(remaining, indicatorCopy, used));
+            groups.add(used);
           }
+          List<ButtonGroup> remaining = new ArrayList<>(work.buttonGroups.subList(i + 1, work.buttonGroups.size()));
+          stack.push(new Work(remaining, indicatorCopy, used));
         }
       }
       return groups;
