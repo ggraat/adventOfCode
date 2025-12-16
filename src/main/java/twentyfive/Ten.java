@@ -59,7 +59,7 @@ public class Ten implements Assignment<Long> {
     for (int i = 0; i < joltages.size(); i++) {
       JoltageMachine joltage = joltages.get(i);
       long shortestPath = joltage.getFewestPresses(joltage.joltage.state);
-      System.out.println(Arrays.toString(joltage.joltage.state) + " " + shortestPath);
+      System.out.println(i + ": " + Arrays.toString(joltage.joltage.state) + " " + shortestPath);
       sum += shortestPath;
     }
     return sum;
@@ -185,18 +185,20 @@ public class Ten implements Assignment<Long> {
       if (memory.containsKey(Arrays.hashCode(joltage))) {
         return memory.get(Arrays.hashCode(joltage));
       }
-      int divided = 0;
-      while (canDivide(joltage)) {
-        joltage = divide(joltage);
+      long min = 100_000L;
+      int divided = 1;
+      int[] dividedJoltage = joltage;
+      while (canDivide(dividedJoltage)) {
+        dividedJoltage = divide(dividedJoltage);
+        long presses = 2 * divided * getFewestPresses(dividedJoltage);
+        if (presses < min) {
+          min = presses;
+        }
         divided++;
-      }
-      if (divided > 0) {
-        return 2 * divided * getFewestPresses(joltage);
       }
       String indicatorString = getIndicatorString(joltage);
       Machine machine = new Machine(indicatorString, buttonGroups);
       List<List<ButtonGroup>> patterns = machine.getPatterns();
-      long min = Integer.MAX_VALUE;
       for (List<ButtonGroup> buttons : patterns) {
         int[] joltageApplied = applyPattern(joltage, buttons);
         if (notPossible(joltageApplied)) {
@@ -209,16 +211,17 @@ public class Ten implements Assignment<Long> {
           }
           continue;
         }
-        divided = 0;
-        while (canDivide(joltageApplied)) {
-          joltageApplied = divide(joltageApplied);
+        divided = 1;
+        int[] joltageAppliedCopy = joltageApplied;
+        while (canDivide(joltageAppliedCopy)) {
+          long presses = 2L * divided * getFewestPresses(joltageAppliedCopy) + buttons.size();
+          if (presses < min) {
+            min = presses;
+          }
+          joltageAppliedCopy = divide(joltageAppliedCopy);
           divided++;
         }
-        assert !isFinished(joltageApplied);
-        assert !canDivide(joltageApplied);
-        assert !notPossible(joltageApplied);
-        int factor = (divided > 0) ? 2 * divided : 1;
-        long presses = factor * getFewestPresses(joltageApplied) + buttons.size();
+        long presses = getFewestPresses(joltageApplied) + buttons.size();
         if (presses < min) {
           min = presses;
         }
