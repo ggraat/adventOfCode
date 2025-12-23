@@ -207,41 +207,19 @@ public class Ten implements Assignment<Long> {
       if (memory.containsKey(new State(joltage))) {
         return memory.get(new State(joltage));
       }
+      if (isFinished(joltage)) {
+        return 0;
+      }
       long min = 100_000L;
       if (canDivide(joltage)) {
-        int[] dividedJoltage = divide(joltage);
-        long presses = 2 * getFewestPresses(dividedJoltage);
-        if (presses < min) {
-          min = presses;
-        }
+        min = Math.min(min, 2 * getFewestPresses(divide(joltage)));
       }
       String indicatorString = getIndicatorString(joltage);
       List<List<ButtonGroup>> patterns = patternCache.computeIfAbsent(indicatorString, pattern -> machine.getPatterns(pattern));
       for (List<ButtonGroup> buttons : patterns) {
         int[] joltageApplied = applyPattern(joltage, buttons);
-        if (notPossible(joltageApplied)) {
-          continue;
-        }
-        if (isFinished(joltageApplied)) {
-          int result = buttons.size();
-          if (result < min) {
-            min = result;
-          }
-          continue;
-        }
-        int divided = 1;
-        int[] joltageAppliedCopy = joltageApplied;
-        while (canDivide(joltageAppliedCopy)) {
-          long presses = 2L * divided * getFewestPresses(joltageAppliedCopy) + buttons.size();
-          if (presses < min) {
-            min = presses;
-          }
-          joltageAppliedCopy = divide(joltageAppliedCopy);
-          divided++;
-        }
-        long presses = getFewestPresses(joltageApplied) + buttons.size();
-        if (presses < min) {
-          min = presses;
+        if (isPossible(joltageApplied)) {
+          min = Math.min(min, buttons.size() + 2 * getFewestPresses(divide(joltageApplied)));
         }
       }
       memory.put(new State(joltage), min);
@@ -260,8 +238,8 @@ public class Ten implements Assignment<Long> {
       return divided;
     }
 
-    private boolean notPossible(int[] joltage) {
-      return Arrays.stream(joltage).anyMatch(i -> i < 0);
+    private boolean isPossible(int[] joltage) {
+      return Arrays.stream(joltage).noneMatch(i -> i < 0);
     }
 
     private boolean isFinished(int[] joltage) {
