@@ -121,20 +121,29 @@ public class Ten implements Assignment<Long> {
 
   static class Machine {
     private final List<ButtonGroup> buttonGroups;
-    Indicator indicator;
+    String indicatorString;
 
     public Machine(String indicatorString, List<ButtonGroup> buttonGroups) {
+      this.indicatorString = indicatorString;
+      this.buttonGroups = buttonGroups;
+    }
+
+    private Indicator createIndicator(String indicatorString) {
       boolean[] endState = new boolean[indicatorString.length()];
       for (int i = 0; i < indicatorString.length(); i++) {
         if (indicatorString.charAt(i) == '#') {
           endState[i] = true;
         }
       }
-      this.indicator = new Indicator(endState);
-      this.buttonGroups = buttonGroups;
+      return new Indicator(endState);
     }
 
     public List<List<ButtonGroup>> getPatterns() {
+      return getPatterns(indicatorString);
+    }
+
+    public List<List<ButtonGroup>> getPatterns(String indicatorString) {
+      Indicator indicator = createIndicator(indicatorString);
       Deque<Work> stack = new ArrayDeque<>();
       stack.push(new Work(buttonGroups, indicator, new ArrayList<>()));
       List<List<ButtonGroup>> groups = new ArrayList<>();
@@ -163,6 +172,18 @@ public class Ten implements Assignment<Long> {
   record Work(List<ButtonGroup> buttonGroups, Indicator indicator, List<ButtonGroup> usedButtons) {
   }
 
+  record State(int[] joltage) {
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof State s && Arrays.equals(joltage, s.joltage);
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(joltage);
+    }
+  }
+
   class Joltage {
     int[] state;
 
@@ -172,33 +193,30 @@ public class Ten implements Assignment<Long> {
   }
 
   private class JoltageMachine {
-    private final List<ButtonGroup> buttonGroups;
     Joltage joltage;
-    Map<Integer, Long> memory = new HashMap<>();
+    Map<State, Long> memory = new HashMap<>();
+    private Machine machine;
+    Map<String, List<List<ButtonGroup>>> patternCache = new HashMap<>();
 
     public JoltageMachine(List<ButtonGroup> buttonGroups, int[] joltage) {
-      this.buttonGroups = buttonGroups;
       this.joltage = new Joltage(joltage);
+      machine = new Machine("", buttonGroups);
     }
-    
+
     public long getFewestPresses(int[] joltage) {
-      if (memory.containsKey(Arrays.hashCode(joltage))) {
-        return memory.get(Arrays.hashCode(joltage));
+      if (memory.containsKey(new State(joltage))) {
+        return memory.get(new State(joltage));
       }
       long min = 100_000L;
-      int divided = 1;
-      int[] dividedJoltage = joltage;
-      while (canDivide(dividedJoltage)) {
-        dividedJoltage = divide(dividedJoltage);
-        long presses = 2 * divided * getFewestPresses(dividedJoltage);
+      if (canDivide(joltage)) {
+        int[] dividedJoltage = divide(joltage);
+        long presses = 2 * getFewestPresses(dividedJoltage);
         if (presses < min) {
           min = presses;
         }
-        divided++;
       }
       String indicatorString = getIndicatorString(joltage);
-      Machine machine = new Machine(indicatorString, buttonGroups);
-      List<List<ButtonGroup>> patterns = machine.getPatterns();
+      List<List<ButtonGroup>> patterns = patternCache.computeIfAbsent(indicatorString, pattern -> machine.getPatterns(pattern));
       for (List<ButtonGroup> buttons : patterns) {
         int[] joltageApplied = applyPattern(joltage, buttons);
         if (notPossible(joltageApplied)) {
@@ -211,7 +229,7 @@ public class Ten implements Assignment<Long> {
           }
           continue;
         }
-        divided = 1;
+        int divided = 1;
         int[] joltageAppliedCopy = joltageApplied;
         while (canDivide(joltageAppliedCopy)) {
           long presses = 2L * divided * getFewestPresses(joltageAppliedCopy) + buttons.size();
@@ -226,7 +244,7 @@ public class Ten implements Assignment<Long> {
           min = presses;
         }
       }
-      memory.put(Arrays.hashCode(joltage), min);
+      memory.put(new State(joltage), min);
       return min;
     }
 
